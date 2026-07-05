@@ -9,9 +9,23 @@ ignored.
 
 import logging
 import time
+import urllib.error
 
 from .mastodon import MastodonAdmin
 from .matrix import MatrixError
+
+
+def _describe(exc, noun):
+    """Human-readable reason for a failed admin call, for the Matrix message."""
+    if isinstance(exc, urllib.error.HTTPError):
+        if exc.code == 404:
+            return "%s not found, it may already be handled" % noun
+        if exc.code == 403:
+            return "permission denied, check the admin token scope"
+        if exc.code == 401:
+            return "authentication failed, check the admin token"
+        return "HTTP %s %s" % (exc.code, exc.reason)
+    return str(exc)
 
 log = logging.getLogger("signup-report-monitor.worker")
 
@@ -132,13 +146,11 @@ class ReactionWorker:
             else:
                 status, _ = self.admin.reject(account_id)
         except Exception as exc:
-            log.error("mastodon %s failed for account=%s: %s", intent, account_id, exc)
-            self._confirm(event_id, "⚠️ Failed to %s @%s (see log)" % (intent, username))
+            self._confirm(event_id, "⚠️ Could not %s @%s: %s" % (intent, username, _describe(exc, "account")))
             return
         self.store.mark_resolved(event_id, intent)
         done = "approved" if intent == "approve" else "rejected"
         emoji = "✅" if intent == "approve" else "❌"
-        log.info("event=admin.%s account=%s http=%s", intent, account_id, status)
         self._confirm(event_id, "%s Signup @%s %s (by %s)" % (emoji, username, done, sender or "?"))
 
     def _act_report(self, event_id, report_id, label, sender):
@@ -146,12 +158,10 @@ class ReactionWorker:
         try:
             status, _ = self.admin.resolve_report(report_id)
         except Exception as exc:
-            log.error("mastodon resolve failed for report=%s: %s", report_id, exc)
-            self._confirm(event_id, "⚠️ Failed to resolve report %s (see log)" % report_id)
+            self._confirm(event_id, "⚠️ Could not resolve report #%s: %s" % (report_id, _describe(exc, "report")))
             return
         self.store.mark_resolved(event_id, "resolve")
         who = ("against @%s " % label) if label else ""
-        log.info("event=admin.resolve report=%s http=%s", report_id, status)
         self._confirm(event_id, "✅ Report #%s %sresolved (by %s)" % (report_id, who, sender or "?"))
 
     def _confirm(self, thread_event_id, text):

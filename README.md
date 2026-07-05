@@ -5,10 +5,12 @@ room, so moderators see new signups and reports as they happen. New signups can
 be enriched with an offline GeoIP lookup and an AI bot/spam risk verdict, and
 (optionally) approved or rejected straight from Matrix with an emoji reaction.
 
-```
-mementomori.social  --admin webhook-->  signup-report-monitor  --Matrix CS API-->  admins room
-                                              |  ^
-                                    approve/reject  emoji reaction
+```mermaid
+flowchart LR
+    M[mementomori.social] -->|admin webhook| S[signup-report-monitor]
+    S -->|Matrix CS API| R[Admins room]
+    R -->|approve / reject / resolve emoji| S
+    S -->|admin API action| M
 ```
 
 Stack: **Python 3, no Docker.** The core forwarder uses only the standard
