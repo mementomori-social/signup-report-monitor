@@ -15,11 +15,14 @@ from .matrix import MatrixError
 
 log = logging.getLogger("signup-report-monitor.worker")
 
-APPROVE_KEYS = {"✅", "☑️", "☑", "\U0001F44D"}  # ✅ ☑️ 👍
-REJECT_KEYS = {"❌", "✖️", "✖", "\U0001F44E", "\U0001F6AB"}  # ❌ ✖️ 👎 🚫
+def _strip_vs(key):
+    """Drop emoji variation selectors so '❌' with U+FE0F matches plain '❌'."""
+    return (key or "").replace("\ufe0f", "").replace("\ufe0e", "")
 
-# Only sync this room, only reaction/message events, small timeline.
-_SYNC_FILTER = None  # built lazily once we know the room id
+
+# Compared after _strip_vs, so list the base code points only.
+APPROVE_KEYS = {_strip_vs(k) for k in ("✅", "☑", "\U0001F44D")}  # ✅ ☑️ 👍
+REJECT_KEYS = {_strip_vs(k) for k in ("❌", "✖", "\U0001F44E", "\U0001F6AB")}  # ❌ ✖️ 👎 🚫
 
 
 class ReactionWorker:
@@ -102,6 +105,7 @@ class ReactionWorker:
             self._handle_reaction(target, key, event.get("sender"))
 
     def _handle_reaction(self, target_event_id, key, sender):
+        key = _strip_vs(key)
         if key in APPROVE_KEYS:
             intent = "approve"
         elif key in REJECT_KEYS:
