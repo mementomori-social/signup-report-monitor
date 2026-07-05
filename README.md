@@ -1,85 +1,136 @@
-# signup-monitor
+# signup-report-monitor
 
-A tiny, zero-dependency **Mastodon → Matrix** forwarder. It receives Mastodon
-admin webhook events and posts them into a Matrix room so your admins see new
-signups and reports as they happen.
-
-Handled events:
-
-- **`account.created`**: 👤 new user signup (username, email, invite request,
-  link to the pending-accounts queue)
-- **`report.created`**: 🚨 new report (category, comment, reported account,
-  link to the report)
+A small Python daemon that forwards Mastodon admin webhook events into a Matrix
+room, so moderators see new signups and reports as they happen. New signups can
+be enriched with an offline GeoIP lookup and an AI bot/spam risk verdict, and
+(optionally) approved or rejected straight from Matrix with an emoji reaction.
 
 ```
-Mastodon instance ──webhook POST──▶ signup-monitor (this) ──▶ Matrix admins room
+mementomori.social  --admin webhook-->  signup-report-monitor  --Matrix CS API-->  admins room
+                                              |  ^
+                                    approve/reject  emoji reaction
 ```
 
-## Requirements
+Stack: **Python 3, no Docker.** The core forwarder uses only the standard
+library. GeoIP needs `maxminddb`; the AI verdict shells out to the `claude` CLI.
+It runs as a normal systemd service under an ordinary user account (so the
+`claude` login is available to it).
 
-- PHP 7.4+ with the `curl` extension (no Composer, no build step)
-- A web server that can run PHP (nginx + PHP-FPM, Apache, or `php -S`)
-- A Matrix bot account with an access token and rights to post in the room
-- Admin access on your Mastodon instance to register a webhook
+## Handled events
 
-## Setup
+- `account.created` -> signup card (username, email, language, reason for
+  joining, optional GeoIP + AI verdict, link to pending accounts)
+- `report.created`  -> report card (reported account, category, reporter,
+  comment, link to the report)
 
-1. **Clone & configure**
+## Layout
 
-   ```bash
-   git clone git@github.com:mementomori-social/signup-monitor.git
-   cd signup-monitor
-   cp .env.example .env
-   $EDITOR .env   # fill in Matrix + Mastodon values
-   ```
+- `signup_report_monitor/` - the package
+  - `config.py` - .env loader (stdlib, real env vars win)
+  - `matrix.py` - minimal Matrix client (send / edit / react / sync)
+  - `mastodon.py` - X-Hub-Signature verification + admin approve/reject
+  - `messages.py` - webhook payload -> Matrix message (plain + HTML)
+  - `geoip.py` - offline City/ASN mmdb lookup (graceful no-op if unavailable)
+  - `analyser.py` - AI bot/spam verdict via the claude CLI
+  - `store.py` - sqlite map event_id -> account/report id (for reactions)
+  - `app.py` - webhook HTTP server + event processing
+  - `worker.py` - Matrix sync loop for emoji approve/reject
+  - `__main__.py` - entry point
+- `signup-report-monitor.service` - systemd unit (runs as user `rolle`)
+- `.env.example` - documented config template
 
-2. **Get a Matrix bot token & room ID**
-   - Log in as the bot account and copy its access token (Element:
-     *Settings → Help & About → Advanced → Access Token*), or provision one via
-     the login API.
-   - The room ID is the **internal** ID (starts with `!`, e.g.
-     `!abc123:chat.example.social`), not the `#alias`. Invite the bot and make
-     sure it has joined.
+## Install
 
-3. **Serve `webhook.php`** behind HTTPS. Example nginx location (PHP-FPM):
+```bash
+git clone <repo> /home/rolle/signup-report-monitor
+cd /home/rolle/signup-report-monitor
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt      # only needed for GeoIP
+cp .env.example .env                            # then edit .env
+sudo mkdir -p /var/log/signup-report-monitor && sudo chown rolle:rolle /var/log/signup-report-monitor
 
-   ```nginx
-   # https://chat.example.social/hooks/mastodon
-   location = /hooks/mastodon {
-       fastcgi_pass unix:/run/php/php-fpm.sock;
-       fastcgi_param SCRIPT_FILENAME /srv/signup-monitor/webhook.php;
-       include fastcgi_params;
-   }
-   ```
+# validate config + Matrix connectivity without starting the server
+.venv/bin/python -m signup_report_monitor --check
+```
 
-   Or, for a quick test: `php -S 127.0.0.1:8099 webhook.php`.
+### nginx
 
-4. **Register the webhook in Mastodon**
-   *Admin → Settings → Webhooks → New webhook*
-   - **URL:** the public URL from step 3 (e.g.
-     `https://chat.example.social/hooks/mastodon`)
-   - **Events:** `account.created`, `report.created`
-   - Copy the generated **signing secret** into `MASTODON_SIGNING_SECRET` in
-     `.env` (or leave blank to skip verification).
+Add an exact-match location to the `chat.mementomori.social` 443 server block:
 
-5. **Test.** Create a test signup (or use Mastodon's webhook "resend"). You
-   should see a message land in the Matrix room, and `event=… matrix_http=200`
-   in the log.
+```nginx
+location = /hooks/mastodon {
+    proxy_pass http://127.0.0.1:8099;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header Host $host;
+}
+```
 
-## Configuration
+`sudo nginx -t && sudo systemctl reload nginx`.
 
-All configuration is via `.env`. See [`.env.example`](.env.example) for the
-full list. `.env` is gitignored; never commit real secrets.
+### systemd
 
-## Notes
+```bash
+sudo cp signup-report-monitor.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now signup-report-monitor
+```
 
-- **Privacy:** by default the log records only the event type and the Matrix
-  HTTP status, no emails or IPs. Set `DEBUG=true` only when troubleshooting
-  (it logs raw payloads, which contain PII), and keep `LOG_FILE` outside any
-  web-served directory.
-- **Security:** when `MASTODON_SIGNING_SECRET` is set, requests must carry a
-  matching `Signature` header or they're rejected with `403`.
+### Mastodon webhook
 
-## License
+In Mastodon admin (Settings -> Webhooks) point the webhook URL at
+`https://chat.mementomori.social/hooks/mastodon`, subscribe to `account.created`
+and `report.created`, and use the signing secret from `.env`. Hit "resend" on a
+past event and confirm `event=... matrix_http=200` appears in the log.
 
-MIT
+## Features
+
+### GeoIP (2A)
+
+Uses offline City + ASN mmdb databases; no signup IP leaves the host. The free
+DB-IP Lite databases need no account or key (CC-BY, updated monthly):
+
+```bash
+cd geoip
+curl -sSLO https://download.db-ip.com/free/dbip-city-lite-$(date +%Y-%m).mmdb.gz
+curl -sSLO https://download.db-ip.com/free/dbip-asn-lite-$(date +%Y-%m).mmdb.gz
+gunzip -f dbip-*.mmdb.gz && mv dbip-city-lite-*.mmdb dbip-city.mmdb && mv dbip-asn-lite-*.mmdb dbip-asn.mmdb
+```
+
+Point `GEOIP_CITY_DB` / `GEOIP_ASN_DB` at them (GeoLite2 files from MaxMind work
+too, same format). If the files or `maxminddb` are missing, the location line is
+simply omitted.
+
+### AI assessment (2B)
+
+Set `CLAUDE_ENABLED=true`. Runs **asynchronously**: the message posts instantly
+with an "analysing" line, then the verdict is edited in, so the slow model call
+never blocks or times out the webhook. For each signup the daemon runs
+`claude -p ... --output-format json --model opus` **as the service user** (that
+user must be logged into Claude Code), optionally with read-only web tools
+(`CLAUDE_WEB=true`) to check email/IP/domain reputation. It renders a coloured
+`risk / verdict` line plus a short plain-prose assessment (the message never
+names the model). The signup application text is untrusted, so the model gets
+only `WebSearch`/`WebFetch`, never Bash. Uses the Claude Code subscription, not
+the paid API.
+
+### Emoji approve/reject (2C)
+
+Set `REACTIONS_ENABLED=true` and provide `MASTODON_ADMIN_TOKEN` (a token with
+`admin:write`). The daemon runs a Matrix `/sync` loop; reacting to a signup
+message with the checkmark emoji approves the account, the cross rejects it, and
+the bot confirms in the room. The event_id -> account_id map is kept in a small
+sqlite file under `STATE_DIR`.
+
+## Logging
+
+PII-safe by default: only the event type and Matrix HTTP status are logged
+(`event=account.created matrix_http=200`). `DEBUG=true` additionally logs message
+bodies; set it only transiently. `LOG_FILE` rotates at 5 MB (3 backups) and must
+live outside any web-served directory.
+
+## Operational notes
+
+- Secrets live only in `.env` (gitignored). Never commit them.
+- The webhook handler always returns 200 to Mastodon once the signature checks
+  out, even if Matrix delivery failed, to avoid retry storms; delivery failures
+  are visible in the log.

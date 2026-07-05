@@ -1,0 +1,24 @@
+[Unit]
+Description=signup-report-monitor: Mastodon admin webhooks to Matrix
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=rolle
+Group=rolle
+WorkingDirectory=/home/rolle/signup-report-monitor
+Environment=HOME=/home/rolle
+# claude lives in ~/.local/bin; node (its runtime) under nvm. Keep both on PATH
+# so the analyser (2B) can shell out to `claude`.
+Environment=PATH=/home/rolle/.local/bin:/home/rolle/.nvm/versions/node/v22.20.0/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/home/rolle/signup-report-monitor/.venv/bin/python -m signup_report_monitor
+Restart=on-failure
+RestartSec=5
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=full
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

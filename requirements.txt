@@ -1,0 +1,4 @@
+# Runtime dependencies. The core forwarder needs none of these (stdlib only).
+# maxminddb is only used for offline GeoIP enrichment (task 2A). If it is not
+# installed, GeoIP is simply skipped.
+maxminddb>=2.2,<3

@@ -1,5 +1,9 @@
 .env
-*.log
-signup-monitor.log
-*.bak
-.original-*
+.venv/
+state/
+geoip/*.mmdb
+__pycache__/
+*.pyc
+# internal ops handover, not for the public repo
+signup-monitor-handover.md
+signup-report-monitor-handover.md
