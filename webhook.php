@@ -1,6 +1,6 @@
 <?php
 /**
- * signup-monitor — Mastodon → Matrix admin forwarder
+ * signup-monitor: Mastodon to Matrix admin forwarder
  *
  * Receives Mastodon admin webhook events (account.created, report.created)
  * and forwards them as messages into a Matrix room using a bot account.

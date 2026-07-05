@@ -6,9 +6,9 @@ signups and reports as they happen.
 
 Handled events:
 
-- **`account.created`** — 👤 new user signup (username, email, invite request,
+- **`account.created`**: 👤 new user signup (username, email, invite request,
   link to the pending-accounts queue)
-- **`report.created`** — 🚨 new report (category, comment, reported account,
+- **`report.created`**: 🚨 new report (category, comment, reported account,
   link to the report)
 
 ```
@@ -38,7 +38,7 @@ Mastodon instance ──webhook POST──▶ signup-monitor (this) ──▶ Ma
      *Settings → Help & About → Advanced → Access Token*), or provision one via
      the login API.
    - The room ID is the **internal** ID (starts with `!`, e.g.
-     `!abc123:chat.example.social`) — not the `#alias`. Invite the bot and make
+     `!abc123:chat.example.social`), not the `#alias`. Invite the bot and make
      sure it has joined.
 
 3. **Serve `webhook.php`** behind HTTPS. Example nginx location (PHP-FPM):
@@ -68,13 +68,13 @@ Mastodon instance ──webhook POST──▶ signup-monitor (this) ──▶ Ma
 
 ## Configuration
 
-All configuration is via `.env` — see [`.env.example`](.env.example) for the
+All configuration is via `.env`. See [`.env.example`](.env.example) for the
 full list. `.env` is gitignored; never commit real secrets.
 
 ## Notes
 
 - **Privacy:** by default the log records only the event type and the Matrix
-  HTTP status — no emails or IPs. Set `DEBUG=true` only when troubleshooting
+  HTTP status, no emails or IPs. Set `DEBUG=true` only when troubleshooting
   (it logs raw payloads, which contain PII), and keep `LOG_FILE` outside any
   web-served directory.
 - **Security:** when `MASTODON_SIGNING_SECRET` is set, requests must carry a
