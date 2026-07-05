@@ -88,6 +88,7 @@ def _ai_block(plain_lines, html_lines, verdict):
     """Render the AI recommendation block. Handles pending/error/real states."""
     if not verdict:
         return
+    _blank(plain_lines, html_lines)  # one empty line before the AI recommendation
     if verdict.get("pending"):
         plain_lines.append("\U0001F916 AI recommendation: analysing...")
         html_lines.append("\U0001F916 <strong>AI recommendation: analysing...</strong>")

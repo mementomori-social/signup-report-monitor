@@ -31,7 +31,7 @@ class MatrixClient:
         self.access_token = access_token
         self.timeout = timeout
 
-    def _request(self, method, path, params=None, body=None):
+    def _request(self, method, path, params=None, body=None, timeout=None):
         url = self.base_url + path
         if params:
             url += "?" + urllib.parse.urlencode(params)
@@ -42,7 +42,7 @@ class MatrixClient:
             headers["Content-Type"] = "application/json"
         req = urllib.request.Request(url, data=data, headers=headers, method=method)
         try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+            with urllib.request.urlopen(req, timeout=timeout or self.timeout) as resp:
                 raw = resp.read().decode("utf-8")
                 return resp.status, (json.loads(raw) if raw else {})
         except urllib.error.HTTPError as exc:
@@ -136,9 +136,12 @@ class MatrixClient:
             params["since"] = since
         if filter_json:
             params["filter"] = filter_json
+        # The socket timeout MUST exceed the server long-poll timeout, else every
+        # idle /sync races the socket and raises a spurious timeout.
         _, data = self._request(
             "GET",
             "/_matrix/client/v3/sync",
             params=params,
+            timeout=timeout_ms / 1000.0 + 20,
         )
         return data

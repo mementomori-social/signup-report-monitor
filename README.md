@@ -1,4 +1,4 @@
-# signup-report-monitor
+# Signup and Report Monitor
 
 A small Python daemon that forwards Mastodon admin webhook events into a Matrix
 room, so moderators see new signups and reports as they happen. New signups can
