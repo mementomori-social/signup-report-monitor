@@ -67,26 +67,22 @@ class ReactionWorker:
         if not self.cfg.mastodon_admin_token:
             log.error("REACTIONS_ENABLED but MASTODON_ADMIN_TOKEN is empty; worker idle")
             return
-        try:
-            self.user_id = self.matrix.whoami()
-        except MatrixError as exc:
-            log.error("worker whoami failed: %s", exc)
-        # Start from the stored position, or from "now" so we do not replay old
-        # reactions on first launch.
-        since = self.store.get_meta("sync_since")
         filt = self._filter()
-        if not since:
-            try:
-                first = self.matrix.sync(since=None, timeout_ms=0, filter_json=filt)
-                since = first.get("next_batch")
-                self.store.set_meta("sync_since", since)
-                log.info("worker initialised sync position")
-            except MatrixError as exc:
-                log.error("worker initial sync failed: %s", exc)
+        # Start from the stored position, or from "now" so we do not replay old
+        # reactions on first launch. Resolved once network is up (retried below).
+        since = self.store.get_meta("sync_since")
 
         backoff = 1
         while True:
             try:
+                # Fetch our own id (to skip our own reactions) and the initial
+                # sync position lazily, so a boot-time network blip self-heals.
+                if self.user_id is None:
+                    self.user_id = self.matrix.whoami()
+                if not since:
+                    since = self.matrix.sync(since=None, timeout_ms=0, filter_json=filt).get("next_batch")
+                    self.store.set_meta("sync_since", since)
+                    log.info("worker initialised sync position")
                 data = self.matrix.sync(since=since, timeout_ms=30000, filter_json=filt)
                 backoff = 1
                 since = data.get("next_batch", since)
