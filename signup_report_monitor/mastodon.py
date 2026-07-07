@@ -47,6 +47,29 @@ class MastodonAdmin:
             raw = resp.read().decode("utf-8")
             return resp.status, (json.loads(raw) if raw else {})
 
+    def _get(self, path):
+        url = self.base_url + path
+        req = urllib.request.Request(
+            url,
+            headers={"Authorization": "Bearer " + self.admin_token},
+            method="GET",
+        )
+        with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+            raw = resp.read().decode("utf-8")
+            return resp.status, (json.loads(raw) if raw else [])
+
+    def count_pending(self):
+        """Count local pending signups. Needs admin:read:accounts scope.
+
+        Mastodon has no total-count field, so we count the returned page; if it
+        is full we report it as "N+". Returns a string, or raises on error.
+        """
+        _, data = self._get(
+            "/api/v1/admin/accounts?origin=local&status=pending&limit=200"
+        )
+        n = len(data) if isinstance(data, list) else 0
+        return "200+" if n >= 200 else str(n)
+
     def approve(self, account_id):
         return self._post("/api/v1/admin/accounts/%s/approve" % account_id)
 

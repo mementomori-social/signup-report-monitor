@@ -15,7 +15,7 @@ from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from . import analyser, geoip as geoip_mod, messages
-from .mastodon import verify_signature
+from .mastodon import MastodonAdmin, verify_signature
 from .matrix import MatrixError
 
 log = logging.getLogger("signup-report-monitor")
@@ -73,6 +73,16 @@ def process_event(services, event, obj):
     return None
 
 
+def _pending_count(cfg):
+    """Local pending-signup count, or None if unavailable (needs read scope)."""
+    if not cfg.mastodon_admin_token:
+        return None
+    try:
+        return MastodonAdmin(cfg.mastodon_base_url, cfg.mastodon_admin_token).count_pending()
+    except Exception:
+        return None  # e.g. token lacks admin:read:accounts
+
+
 def _run_analysis(services, obj, geoip, signup, event_id):
     """Run the (slow) analysis off the request path, then edit the verdict in."""
     cfg = services.cfg
@@ -82,8 +92,10 @@ def _run_analysis(services, obj, geoip, signup, event_id):
         log.exception("analysis error")
         verdict = None
     final = verdict or {"error": True}
+    count = _pending_count(cfg)
     try:
-        plain, html = messages.format_account_created(obj, cfg, geoip=geoip, verdict=final)
+        plain, html = messages.format_account_created(
+            obj, cfg, geoip=geoip, verdict=final, pending_count=count)
         services.matrix.edit_message(cfg.matrix_room_id, event_id, plain, html)
     except MatrixError as exc:
         log.error("analysis edit failed http=%s", exc.status)

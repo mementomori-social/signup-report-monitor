@@ -7,6 +7,7 @@ store) are acted on; the bot's own reactions and already-resolved messages are
 ignored.
 """
 
+import html
 import logging
 import time
 import urllib.error
@@ -147,7 +148,16 @@ class ReactionWorker:
         self.store.mark_resolved(event_id, intent)
         done = "approved" if intent == "approve" else "rejected"
         emoji = "✅" if intent == "approve" else "❌"
-        self._confirm(event_id, "%s Signup @%s %s (by %s)" % (emoji, username, done, sender or "?"))
+        line = "%s Signup @%s %s (by %s)" % (emoji, username, done, sender or "?")
+        if intent == "approve":
+            # Link to the now-live profile so a moderator can click and follow.
+            url = "%s/@%s" % (self.cfg.mastodon_base_url, username)
+            plain = "%s\n\nLink to account profile: %s" % (line, url)
+            body = '%s<br><br><a href="%s">Link to account profile</a>' % (
+                html.escape(line), html.escape(url))
+            self._confirm(event_id, plain, body)
+        else:
+            self._confirm(event_id, line)
 
     def _act_report(self, event_id, report_id, label, sender):
         # Reports have a single closing action: resolve (both emoji mean "handled").
@@ -160,8 +170,8 @@ class ReactionWorker:
         who = ("against @%s " % label) if label else ""
         self._confirm(event_id, "✅ Report #%s %sresolved (by %s)" % (report_id, who, sender or "?"))
 
-    def _confirm(self, thread_event_id, text):
+    def _confirm(self, thread_event_id, text, html_body=None):
         try:
-            self.matrix.send_thread_reply(self.cfg.matrix_room_id, thread_event_id, text)
+            self.matrix.send_thread_reply(self.cfg.matrix_room_id, thread_event_id, text, html_body)
         except MatrixError as exc:
             log.warning("confirm reply failed http=%s", exc.status)

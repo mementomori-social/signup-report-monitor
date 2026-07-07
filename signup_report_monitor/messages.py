@@ -126,12 +126,13 @@ def _geoip_line(plain_lines, html_lines, geoip):
         _kv(plain_lines, html_lines, "Location", " | ".join(parts))
 
 
-def _tail(plain_lines, html_lines, cfg, view_label, view_url, hint):
-    """View link, then blank + ping, then blank + reaction hint."""
-    plain_lines.append("%s: %s" % (view_label, view_url))
-    html_lines.append(
-        '<strong><a href="%s">%s</a></strong>' % (html.escape(view_url), html.escape(view_label))
-    )
+def _tail(plain_lines, html_lines, cfg, links, hint):
+    """One or more view links, then blank + ping, then blank + reaction hint."""
+    for label, url in links:
+        plain_lines.append("%s: %s" % (label, url))
+        html_lines.append(
+            '<strong><a href="%s">%s</a></strong>' % (html.escape(url), html.escape(label))
+        )
     if cfg.ping_plain or cfg.ping_html:
         _blank(plain_lines, html_lines)
         plain_lines.append("Ping %s" % (cfg.ping_plain or ""))
@@ -142,8 +143,9 @@ def _tail(plain_lines, html_lines, cfg, view_label, view_url, hint):
         html_lines.append(html.escape(hint))
 
 
-def format_account_created(obj, cfg, geoip=None, verdict=None):
+def format_account_created(obj, cfg, geoip=None, verdict=None, pending_count=None):
     username = _acct_username(obj) or "(unknown)"
+    account_id = _g(obj, "id")
     pending_url = "%s/admin/accounts?origin=local&status=pending" % cfg.mastodon_base_url
 
     plain_lines = ["👤 New signup request"]
@@ -160,8 +162,16 @@ def format_account_created(obj, cfg, geoip=None, verdict=None):
         _kv(plain_lines, html_lines, "Reasons for joining", _g(obj, "invite_request"))
 
     _ai_block(plain_lines, html_lines, verdict)
-    _tail(plain_lines, html_lines, cfg, "View pending accounts", pending_url,
-          "React ✅ to approve, ❌ to reject")
+
+    links = []
+    if account_id:
+        links.append(("View this application",
+                      "%s/admin/accounts/%s" % (cfg.mastodon_base_url, account_id)))
+    pending_label = "View all pending accounts"
+    if pending_count is not None:
+        pending_label += " (%s)" % pending_count
+    links.append((pending_label, pending_url))
+    _tail(plain_lines, html_lines, cfg, links, "React ✅ to approve, ❌ to reject")
     return "\n".join(plain_lines), "<br>".join(html_lines)
 
 
@@ -182,5 +192,5 @@ def format_report_created(obj, cfg):
     if _g(obj, "comment"):
         _kv(plain_lines, html_lines, "Comment", _g(obj, "comment"))
 
-    _tail(plain_lines, html_lines, cfg, "View report", link, "React ✅ to resolve")
+    _tail(plain_lines, html_lines, cfg, [("View report", link)], "React ✅ to resolve")
     return "\n".join(plain_lines), "<br>".join(html_lines)
