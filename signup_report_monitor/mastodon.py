@@ -64,8 +64,10 @@ class MastodonAdmin:
         Mastodon has no total-count field, so we count the returned page; if it
         is full we report it as "N+". Returns a string, or raises on error.
         """
+        # v2 honours origin/status; the v1 endpoint silently ignores them and
+        # returns every account, which is wrong.
         _, data = self._get(
-            "/api/v1/admin/accounts?origin=local&status=pending&limit=200"
+            "/api/v2/admin/accounts?origin=local&status=pending&limit=200"
         )
         n = len(data) if isinstance(data, list) else 0
         return "200+" if n >= 200 else str(n)
