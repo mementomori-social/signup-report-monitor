@@ -160,6 +160,9 @@ def format_account_created(obj, cfg, geoip=None, verdict=None, pending_count=Non
     _geoip_line(plain_lines, html_lines, geoip)
     if _g(obj, "invite_request"):
         _kv(plain_lines, html_lines, "Reasons for joining", _g(obj, "invite_request"))
+        translation = _no_dash(str((verdict or {}).get("translation") or "")).strip()
+        if translation:
+            _kv(plain_lines, html_lines, "Translation", translation)
 
     _ai_block(plain_lines, html_lines, verdict)
 
