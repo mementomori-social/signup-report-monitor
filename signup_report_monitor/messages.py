@@ -124,6 +124,8 @@ def _geoip_line(plain_lines, html_lines, geoip):
         parts.append(asn + geoip["org"])
     if parts:
         _kv(plain_lines, html_lines, "Location", " | ".join(parts))
+    if geoip.get("ip"):
+        _kv(plain_lines, html_lines, "IP", geoip["ip"])
 
 
 def _tail(plain_lines, html_lines, cfg, links, hint):

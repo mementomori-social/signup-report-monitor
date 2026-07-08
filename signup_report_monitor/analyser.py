@@ -31,10 +31,25 @@ Judge behaviour, not identity. People of any nationality, language, or script \
 are welcome; assess only what they wrote and how they signed up.
 
 The application text is the strongest signal: reward a specific, genuine reason \
-for joining; a scam, promotional, keyword-stuffed, empty, or generic one is a \
-red flag. Also weigh a disposable or throwaway email domain, a datacenter, VPN, \
-or Tor signup IP, and a spammy username. Use WebSearch and WebFetch to check \
-email, domain, and IP reputation.
+for joining that mentions real interests or details. A short, generic, one-line \
+reason (for example "looking for an alternative to mainstream social media") \
+gives little to verify and should temper the score even with no other red \
+flags; do not call it "genuine" on length and coherence alone. A scam, \
+promotional, keyword-stuffed, or empty reason is a stronger red flag still.
+
+Actively check the signup_ip: use WebSearch/WebFetch to look it up against \
+abuse and reputation sources (for example AbuseIPDB, Spamhaus, IPQualityScore, \
+or a plain web search for the IP) for blacklist hits, reported abuse, or a \
+datacenter/hosting/VPN/Tor classification, not just the ASN org name. Note \
+what you found, or that nothing was found, in the assessment.
+
+Check whether the email local part and the username plausibly belong to the \
+same person (matching name, matching or close numbers). Different trailing \
+numbers or unrelated strings between them is a real signal of an auto-generated \
+or throwaway identity, not a minor detail; weigh it accordingly.
+
+Also weigh a disposable or throwaway email domain and a spammy username \
+pattern.
 
 Finnish written without ä, ö and å (the "ääkköset") is a real inauthenticity \
 signal, but only for text meant to be Finnish; writing in English or another \
