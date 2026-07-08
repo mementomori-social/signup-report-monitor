@@ -6,4 +6,4 @@ posts them into a Matrix room, and (optionally) lets moderators approve or
 reject pending accounts by reacting to the message.
 """
 
-__version__ = "2.0.0"
+__version__ = "2.3.1"
