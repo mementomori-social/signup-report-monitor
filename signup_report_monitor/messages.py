@@ -94,8 +94,10 @@ def _ai_block(plain_lines, html_lines, verdict):
         html_lines.append("\U0001F916 <strong>AI recommendation: analysing...</strong>")
         return
     if verdict.get("error"):
-        plain_lines.append("⚪ AI recommendation: unavailable")
-        html_lines.append("⚪ <strong>AI recommendation: unavailable</strong>")
+        reason = _no_dash(str(verdict.get("reason") or "")).strip()
+        suffix = " (%s)" % reason if reason else ""
+        plain_lines.append("⚪ AI recommendation: unavailable%s" % suffix)
+        html_lines.append("⚪ <strong>AI recommendation: unavailable%s</strong>" % html.escape(suffix))
         return
     label = str(verdict.get("verdict", "?")).upper()
     risk = verdict.get("risk", "?")

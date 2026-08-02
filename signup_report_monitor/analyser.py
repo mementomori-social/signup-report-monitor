@@ -113,8 +113,41 @@ def _extract_json(text):
         return None
 
 
+def _failure_reason(proc):
+    """Best-effort human-readable reason from a failed/errored claude call.
+
+    "subtype" is unreliable (stays "success" even when is_error is true), so
+    prefer "result" (claude's own explanation) or "terminal_reason".
+    """
+    envelope = None
+    try:
+        envelope = json.loads(proc.stdout)
+    except ValueError:
+        pass
+    if isinstance(envelope, dict):
+        status = envelope.get("api_error_status")
+        detail = envelope.get("result") or None
+        if not detail:
+            terminal = envelope.get("terminal_reason")
+            if terminal and terminal != "completed":
+                detail = terminal
+        if status and detail:
+            return "Error %s: %s" % (status, str(detail)[:100])
+        if status:
+            return "Error %s" % status
+        if envelope.get("is_error") and detail:
+            return str(detail)[:100]
+    stderr_line = (proc.stderr or "").strip().splitlines()[:1]
+    if stderr_line:
+        return stderr_line[0][:120]
+    return "exit %s" % proc.returncode
+
+
 def analyse(cfg, signup):
-    """Return a verdict dict or None. Never raises."""
+    """Return a verdict dict, or {"error": True, "reason": "..."} on failure.
+
+    Never raises. Returns None only when the analyser is disabled.
+    """
     if not cfg.claude_enabled:
         return None
     prompt = _PROMPT_TEMPLATE.format(fields=_build_fields(signup))
@@ -133,12 +166,17 @@ def analyse(cfg, signup):
             stdin=subprocess.DEVNULL,  # else `claude -p` waits ~3s for stdin
             timeout=cfg.claude_timeout,
         )
-    except (OSError, subprocess.TimeoutExpired) as exc:
+    except subprocess.TimeoutExpired:
+        reason = "timed out after %ss" % cfg.claude_timeout
+        log.warning("claude invocation failed: %s", reason)
+        return {"error": True, "reason": reason}
+    except OSError as exc:
         log.warning("claude invocation failed: %s", exc)
-        return None
+        return {"error": True, "reason": str(exc)[:120]}
     if proc.returncode != 0:
-        log.warning("claude exited %s: %s", proc.returncode, proc.stderr.strip()[:200])
-        return None
+        reason = _failure_reason(proc)
+        log.warning("claude exited %s: %s", proc.returncode, reason)
+        return {"error": True, "reason": reason}
 
     inner = proc.stdout
     try:
@@ -150,5 +188,5 @@ def analyse(cfg, signup):
     verdict = _extract_json(inner)
     if not isinstance(verdict, dict) or "verdict" not in verdict:
         log.warning("claude returned unparseable verdict")
-        return None
+        return {"error": True, "reason": "malformed response"}
     return verdict

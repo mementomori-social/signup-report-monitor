@@ -100,7 +100,9 @@ def _run_analysis(services, obj, geoip, signup, event_id):
     except MatrixError as exc:
         log.error("analysis edit failed http=%s", exc.status)
         return
-    if verdict:
+    if verdict and verdict.get("error"):
+        log.info("event=account.analysis verdict=unavailable reason=%r", verdict.get("reason"))
+    elif verdict:
         log.info("event=account.analysis verdict=%s risk=%s", verdict.get("verdict"), verdict.get("risk"))
     else:
         log.info("event=account.analysis verdict=unavailable")
