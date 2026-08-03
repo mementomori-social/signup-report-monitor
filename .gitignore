@@ -4,6 +4,8 @@ state/
 geoip/*.mmdb
 __pycache__/
 *.pyc
+# isolated $HOME for headless claude subprocess calls, see analyser._headless_env
+.claude-home/
 # internal ops handover, not for the public repo
 signup-monitor-handover.md
 signup-report-monitor-handover.md
