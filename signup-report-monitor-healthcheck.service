@@ -1,0 +1,13 @@
+[Unit]
+Description=signup-report-monitor: check that the AI analyser can still authenticate
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=rolle
+Group=rolle
+WorkingDirectory=/home/rolle/signup-report-monitor
+Environment=HOME=/home/rolle
+Environment=PATH=/home/rolle/.local/bin:/home/rolle/.nvm/versions/node/v22.20.0/bin:/usr/local/bin:/usr/bin:/bin
+EnvironmentFile=-/home/rolle/.config/claude/token.env
+ExecStart=/home/rolle/signup-report-monitor/.venv/bin/python -m signup_report_monitor.healthcheck

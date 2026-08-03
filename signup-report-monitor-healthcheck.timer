@@ -1,0 +1,9 @@
+[Unit]
+Description=Run the signup-report-monitor AI auth check twice daily
+
+[Timer]
+OnCalendar=*-*-* 00,12:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

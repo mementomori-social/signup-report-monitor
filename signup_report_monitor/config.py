@@ -76,6 +76,10 @@ class Config:
         self.claude_model = get("CLAUDE_MODEL") or "opus"
         # Allow read-only web lookups (email/IP/domain reputation) during analysis.
         self.claude_web = (get("CLAUDE_WEB") or "true").lower() == "true"
+        # $HOME for the claude subprocess: isolated from any interactive
+        # session, so only CLAUDE_CODE_OAUTH_TOKEN (via EnvironmentFile) can
+        # authenticate it. See analyser._headless_env.
+        self.claude_home = get("CLAUDE_HOME") or os.path.join(here, ".claude-home")
 
         # Reaction worker (emoji approve/reject). Empty = disabled.
         self.reactions_enabled = (get("REACTIONS_ENABLED") or "false").lower() == "true"

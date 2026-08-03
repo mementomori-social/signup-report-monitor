@@ -19,7 +19,27 @@ Output contract:
 
 import json
 import logging
+import os
 import subprocess
+
+
+def _headless_env(cfg):
+    """Environment for the claude subprocess, isolated from any interactive
+    session under this user's real $HOME.
+
+    `claude` appears to silently fall back to `~/.claude` interactive session
+    credentials when CLAUDE_CODE_OAUTH_TOKEN is invalid, instead of failing.
+    That means analysis (and a health check of it) could pass or fail based on
+    whether someone happens to be logged into an interactive session on this
+    host, masking the actual state of the dedicated long-lived token. Pointing
+    HOME at a private, credential-free directory forces CLAUDE_CODE_OAUTH_TOKEN
+    to be the only possible auth path.
+    """
+    env = dict(os.environ)
+    home = cfg.claude_home
+    os.makedirs(home, exist_ok=True)
+    env["HOME"] = home
+    return env
 
 log = logging.getLogger("signup-report-monitor.analyser")
 
@@ -143,6 +163,31 @@ def _failure_reason(proc):
     return "exit %s" % proc.returncode
 
 
+def check_auth(cfg):
+    """Cheap standalone check that `claude` can still authenticate.
+
+    Uses the same binary, token, and model as real analysis (so it catches
+    the same failure modes: expired token, no model access, etc.) but with a
+    trivial prompt and no web tools, to keep it fast and near-free.
+    Returns (ok, reason). Never raises.
+    """
+    cmd = [cfg.claude_bin, "-p", "Reply with exactly: ok", "--output-format", "json"]
+    if cfg.claude_model:
+        cmd += ["--model", cfg.claude_model]
+    try:
+        proc = subprocess.run(
+            cmd, capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=60,
+            env=_headless_env(cfg),
+        )
+    except subprocess.TimeoutExpired:
+        return False, "timed out after 60s"
+    except OSError as exc:
+        return False, str(exc)[:120]
+    if proc.returncode != 0:
+        return False, _failure_reason(proc)
+    return True, None
+
+
 def analyse(cfg, signup):
     """Return a verdict dict, or {"error": True, "reason": "..."} on failure.
 
@@ -165,6 +210,7 @@ def analyse(cfg, signup):
             text=True,
             stdin=subprocess.DEVNULL,  # else `claude -p` waits ~3s for stdin
             timeout=cfg.claude_timeout,
+            env=_headless_env(cfg),
         )
     except subprocess.TimeoutExpired:
         reason = "timed out after %ss" % cfg.claude_timeout
